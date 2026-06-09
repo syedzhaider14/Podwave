@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+    xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+    xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <atom:link href="https://feeds.example.com/signal" rel="self" type="application/rss+xml"/>
+    <title>Signal &amp; Noise</title>
+    <link>https://signal.example.com</link>
+    <description><![CDATA[A show about <b>how things work</b>.]]></description>
+    <language>en-us</language>
+    <itunes:author>Example Media</itunes:author>
+    <itunes:image href="https://cdn.example.com/show.jpg"/>
+    <image>
+      <url>https://cdn.example.com/show-small.jpg</url>
+      <title>Signal &amp; Noise</title>
+      <link>https://signal.example.com</link>
+    </image>
+    <itunes:category text="Technology"/>
+    <itunes:category text="Society &amp; Culture">
+      <itunes:category text="Documentary"/>
+    </itunes:category>
+    <itunes:explicit>false</itunes:explicit>
+
+    <item>
+      <title>Episode 3: Batteries</title>
+      <itunes:title>Batteries</itunes:title>
+      <guid isPermaLink="false">signal-003</guid>
+      <pubDate>Wed, 02 Oct 2024 13:00:00 GMT</pubDate>
+      <description>Plain summary.</description>
+      <content:encoded><![CDATA[<p>Why your phone dies at <i>20%</i>.</p>]]></content:encoded>
+      <enclosure url="https://cdn.example.com/003.mp3" length="45120000" type="audio/mpeg"/>
+      <itunes:duration>1:02:03</itunes:duration>
+      <itunes:season>1</itunes:season>
+      <itunes:episode>3</itunes:episode>
+      <itunes:explicit>yes</itunes:explicit>
+      <itunes:image href="https://cdn.example.com/003.jpg"/>
+    </item>
+
+    <item>
+      <title>Episode 2: Bridges</title>
+      <pubDate>Wed, 25 Sep 2024 08:00:00 EST</pubDate>
+      <itunes:summary>Summary from iTunes.</itunes:summary>
+      <enclosure url="https://cdn.example.com/002.m4a?tracking=1" length="0" type="audio/x-m4a"/>
+      <itunes:duration>2723</itunes:duration>
+    </item>
+
+    <item>
+      <title>Trailer (video)</title>
+      <guid>signal-trailer</guid>
+      <enclosure url="https://cdn.example.com/trailer.mp4" type="video/mp4"/>
+    </item>
+
+    <item>
+      <title>Blog post without audio</title>
+      <guid>signal-blog</guid>
+    </item>
+  </channel>
+</rss>
