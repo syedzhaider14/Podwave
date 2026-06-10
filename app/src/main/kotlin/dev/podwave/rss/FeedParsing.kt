@@ -39,3 +39,44 @@ private val zoneAbbreviations = mapOf(
 )
 
 private val rfc822Variants = listOf(
+    DateTimeFormatter.RFC_1123_DATE_TIME,
+    DateTimeFormatter.ofPattern("EEE, d MMM yyyy HH:mm Z", Locale.ENGLISH),
+    DateTimeFormatter.ofPattern("d MMM yyyy HH:mm:ss Z", Locale.ENGLISH),
+    DateTimeFormatter.ofPattern("EEE, d MMMM yyyy HH:mm:ss Z", Locale.ENGLISH),
+)
+
+/**
+ * Parses RSS `pubDate` values. The spec says RFC 822, but feeds also use named US time zones,
+ * two-digit days without the weekday, full month names and ISO-8601. Returns null rather than
+ * guessing when nothing matches.
+ */
+fun parsePubDate(raw: String?): Instant? {
+    var value = raw?.trim()?.replace(Regex("\\s+"), " ")?.takeIf { it.isNotEmpty() } ?: return null
+
+    val zone = value.substringAfterLast(' ')
+    zoneAbbreviations[zone.uppercase(Locale.ROOT)]?.let { offset ->
+        value = value.dropLast(zone.length) + offset
+    }
+
+    // Some feeds get the weekday wrong ("Mon, 2 Oct 2002" was a Wednesday), which strict
+    // RFC 1123 parsing rejects; retrying without the weekday recovers the date.
+    val candidates = listOf(value, value.substringAfter(", ", value))
+    for (candidate in candidates) {
+        for (formatter in rfc822Variants) {
+            try {
+                return ZonedDateTime.parse(candidate, formatter).toInstant()
+            } catch (_: DateTimeParseException) {
+                // Try the next variant.
+            }
+        }
+    }
+    return try {
+        ZonedDateTime.parse(value, DateTimeFormatter.ISO_OFFSET_DATE_TIME).toInstant()
+    } catch (_: DateTimeParseException) {
+        null
+    }
+}
+
+/** `yes`, `true` and `explicit` all mean explicit; anything else (including `clean`) does not. */
+fun parseExplicit(raw: String?): Boolean =
+    raw?.trim()?.lowercase(Locale.ROOT) in setOf("yes", "true", "explicit")
