@@ -113,3 +113,118 @@ class PlayerController @Inject constructor(
                 speed = player.playbackParameters.speed,
                 upNextCount = (player.mediaItemCount - player.currentMediaItemIndex - 1).coerceAtLeast(0),
                 hasError = player.playerError != null,
+            )
+        }
+    }
+
+    /** Position isn't pushed by the player, so poll it while playing; also drives the sleep timer. */
+    private fun startTicker(controller: MediaController) {
+        scope.launch(Dispatchers.Main) {
+            while (controller.isConnected) {
+                val now = SystemClock.elapsedRealtime()
+                val timer = _state.value.sleepTimer
+                if (SleepTimer.isExpired(timer, now)) {
+                    controller.pause()
+                    controller.volume = 1f
+                    _state.update { it.copy(sleepTimer = SleepTimerState.Off, sleepRemainingMs = null) }
+                } else if (timer is SleepTimerState.Countdown) {
+                    controller.volume = SleepTimer.volumeFor(timer, now)
+                }
+                _state.update {
+                    it.copy(
+                        positionMs = controller.currentPosition.coerceAtLeast(0),
+                        sleepRemainingMs = SleepTimer.remainingMs(it.sleepTimer, now),
+                    )
+                }
+                delay(if (controller.isPlaying) 500 else 1_000)
+            }
+        }
+    }
+
+    /** Mirrors the saved queue into the player's playlist after the current item. */
+    private fun syncQueue(controller: MediaController) {
+        scope.launch(Dispatchers.Main) {
+            episodes.observeQueue().collect { queue ->
+                if (controller.mediaItemCount == 0) return@collect
+                val current = controller.currentMediaItemIndex
+                val upNext = queue.filter { it.id != controller.currentMediaItem?.mediaId }.map { it.toMediaItem() }
+                controller.replaceMediaItems(current + 1, controller.mediaItemCount, upNext)
+                if (current > 0) controller.removeMediaItems(0, current)
+            }
+        }
+    }
+
+    suspend fun play(episode: Episode) {
+        val controller = controller()
+        if (_state.value.episodeId == episode.id) {
+            controller.play()
+            return
+        }
+        episodes.removeFromQueue(episode.id)
+        val queue = episodes.getEpisodes(episodes.queueIds()).filter { it.id != episode.id }
+        controller.setMediaItems(
+            (listOf(episode) + queue).map { it.toMediaItem() },
+            /* startIndex = */ 0,
+            /* startPositionMs = */ episode.startPositionMs(),
+        )
+        controller.setPlaybackSpeed(settings.current().playbackSpeed)
+        controller.prepare()
+        controller.play()
+    }
+
+    suspend fun togglePlayPause() {
+        val controller = controller()
+        if (controller.isPlaying) controller.pause() else controller.play()
+    }
+
+    suspend fun seekTo(positionMs: Long) = controller().seekTo(positionMs.coerceAtLeast(0))
+
+    suspend fun skipBack() {
+        val controller = controller()
+        controller.seekTo((controller.currentPosition - settings.current().skipBackSeconds * 1_000L).coerceAtLeast(0))
+    }
+
+    suspend fun skipForward() {
+        val controller = controller()
+        val target = controller.currentPosition + settings.current().skipForwardSeconds * 1_000L
+        val duration = controller.duration
+        controller.seekTo(if (duration > 0) target.coerceAtMost(duration - 1_000) else target)
+    }
+
+    suspend fun skipToNext() = controller().seekToNextMediaItem()
+
+    /** Changes the speed now and remembers it as the default for future episodes. */
+    suspend fun setSpeed(speed: Float) {
+        controller().setPlaybackSpeed(speed)
+        settings.setPlaybackSpeed(speed)
+    }
+
+    suspend fun setSleepTimer(option: SleepTimerOption) {
+        val controller = controller()
+        val newState = SleepTimer.start(option, SystemClock.elapsedRealtime())
+        controller.sendCustomCommand(
+            PodwaveCommands.PauseAtEnd,
+            PodwaveCommands.pauseAtEndArgs(enabled = newState == SleepTimerState.EndOfEpisode),
+        )
+        if (newState == SleepTimerState.Off) controller.volume = 1f
+        _state.update { it.copy(sleepTimer = newState, sleepRemainingMs = SleepTimer.remainingMs(newState, SystemClock.elapsedRealtime())) }
+    }
+
+    /** "+5 min" on a running countdown; starts one if the timer was off or set to end of episode. */
+    suspend fun extendSleepTimer(minutes: Int) {
+        val current = _state.value.sleepTimer
+        if (current !is SleepTimerState.Countdown) return setSleepTimer(SleepTimerOption.Minutes(minutes))
+        val now = SystemClock.elapsedRealtime()
+        val extended = SleepTimer.extend(current, minutes, now)
+        _state.update { it.copy(sleepTimer = extended, sleepRemainingMs = SleepTimer.remainingMs(extended, now)) }
+    }
+
+    suspend fun stop() {
+        val controller = controller()
+        controller.stop()
+        controller.clearMediaItems()
+    }
+}
+
+@Suppress("OPT_IN_USAGE")
+private fun <T> Deferred<T>.getCompletedOrNull(): T? = if (isCompleted) runCatching { getCompleted() }.getOrNull() else null
