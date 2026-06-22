@@ -94,3 +94,99 @@ class PlaybackService : MediaSessionService() {
         }
         session = null
         scope.cancel()
+        super.onDestroy()
+    }
+
+    private fun savePosition() {
+        val id = currentEpisodeId ?: return
+        val position = player.currentPosition
+        if (position <= 0) return
+        scope.launch { episodes.savePosition(id, position) }
+    }
+
+    private fun startSavingPeriodically() {
+        positionSaver?.cancel()
+        positionSaver = scope.launch {
+            while (isActive) {
+                delay(SAVE_INTERVAL_MS)
+                savePosition()
+            }
+        }
+    }
+
+    private inner class PlayerListener : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            if (isPlaying) {
+                startSavingPeriodically()
+            } else {
+                positionSaver?.cancel()
+                savePosition()
+            }
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            val previous = currentEpisodeId
+            currentEpisodeId = mediaItem?.mediaId
+            scope.launch {
+                if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO && previous != null) {
+                    episodes.markPlayed(previous)
+                }
+                // Whatever is playing now is no longer "up next".
+                mediaItem?.mediaId?.let { episodes.removeFromQueue(it) }
+            }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED) {
+                currentEpisodeId?.let { id -> scope.launch { episodes.markPlayed(id) } }
+            }
+        }
+    }
+
+    private inner class SessionCallback : MediaSession.Callback {
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): MediaSession.ConnectionResult {
+            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
+                .add(PodwaveCommands.PauseAtEnd)
+                .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction == PodwaveCommands.ACTION_PAUSE_AT_END) {
+                player.pauseAtEndOfMediaItems = args.getBoolean(PodwaveCommands.EXTRA_ENABLED)
+                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
+            }
+            return super.onCustomCommand(session, controller, customCommand, args)
+        }
+
+        /** Restores URIs that are stripped when a controller lives in another process. */
+        override fun onAddMediaItems(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            mediaItems: MutableList<MediaItem>,
+        ): ListenableFuture<MutableList<MediaItem>> {
+            val resolved = mediaItems.map { item ->
+                if (item.localConfiguration != null) {
+                    item
+                } else {
+                    item.buildUpon().setUri(item.requestMetadata.mediaUri).build()
+                }
+            }
+            return Futures.immediateFuture(resolved.toMutableList())
+        }
+    }
+
+    private companion object {
+        const val SAVE_INTERVAL_MS = 10_000L
+    }
+}
