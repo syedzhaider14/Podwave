@@ -14,3 +14,19 @@ fun parseItunesDuration(raw: String?): Long? {
         return value.toDoubleOrNull()?.takeIf { it >= 0 && it.isFinite() }?.toLong()
     }
 
+    val parts = value.split(':')
+    if (parts.size > 3 || parts.any { it.isBlank() }) return null
+    val numbers = parts.map { it.trim().toDoubleOrNull() ?: return null }
+    if (numbers.any { it < 0 }) return null
+
+    return numbers.fold(0.0) { total, part -> total * 60 + part }.toLong()
+}
+
+/** Formats seconds as "1:02:03" or "2:03". */
+fun formatDuration(totalSeconds: Long): String {
+    val seconds = totalSeconds.coerceAtLeast(0)
+    val h = seconds / 3600
+    val m = (seconds % 3600) / 60
+    val s = seconds % 60
+    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+}
