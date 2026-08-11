@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+     xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+     xmlns:content="http://purl.org/rss/1.0/modules/content/"
+     xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>The Signal &amp; the Noise</title>
+    <link>https://example.com/show</link>
+    <atom:link href="https://example.com/feed.xml" rel="self" type="application/rss+xml"/>
+    <description><![CDATA[Weekly conversations about <b>data</b>.]]></description>
+    <language>en-us</language>
+    <itunes:author>Jane Host</itunes:author>
+    <itunes:explicit>no</itunes:explicit>
+    <itunes:image href="https://example.com/art.jpg"/>
+    <image>
+      <url>https://example.com/fallback.jpg</url>
+      <title>ignored</title>
+    </image>
+    <itunes:category text="Science">
+      <itunes:category text="Mathematics"/>
+    </itunes:category>
+    <itunes:category text="Technology"/>
+
+    <item>
+      <title>Episode 2: Outliers</title>
+      <guid isPermaLink="false">ep-2</guid>
+      <pubDate>Tue, 10 Jun 2025 04:00:00 +0000</pubDate>
+      <enclosure url="https://cdn.example.com/ep2.mp3" length="34567890" type="audio/mpeg"/>
+      <itunes:duration>1:02:03</itunes:duration>
+      <itunes:season>1</itunes:season>
+      <itunes:episode>2</itunes:episode>
+      <itunes:explicit>yes</itunes:explicit>
+      <description>Short description.</description>
+      <content:encoded><![CDATA[<p>Full <a href="https://example.com">show notes</a>.</p>]]></content:encoded>
+    </item>
+
+    <item>
+      <title>Trailer</title>
+      <pubDate>Mon, 2 Jun 2025 09:30:00 PDT</pubDate>
+      <enclosure url="https://cdn.example.com/trailer.mp3" type="audio/mpeg" length="0"/>
+      <itunes:duration>95</itunes:duration>
+      <itunes:episodeType>trailer</itunes:episodeType>
+      <itunes:image href="https://example.com/trailer.jpg"/>
+      <itunes:summary>Coming soon.</itunes:summary>
+    </item>
+
+    <item>
+      <title>A blog post with no audio</title>
+      <guid>post-1</guid>
+      <description>Not an episode.</description>
+    </item>
+
+    <item>
+      <title>Episode 2: Outliers (duplicate)</title>
+      <guid>ep-2</guid>
+      <enclosure url="https://cdn.example.com/ep2-dup.mp3" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>
