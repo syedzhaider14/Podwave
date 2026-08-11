@@ -1,13 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Five bars of a sound wave, kept inside the 66dp adaptive-icon safe zone. -->
+<!-- A sound wave inside a play button. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:pathData="M34,48L34,60M44,42L44,66M54,34L54,74M64,42L64,66M74,48L74,60"
-        android:strokeWidth="6"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeLineCap="round" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,46h4v16h-4zM48,40h4v28h-4zM56,34h4v40h-4zM64,42h4v24h-4z" />
 </vector>
