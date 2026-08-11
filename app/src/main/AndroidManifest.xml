@@ -13,15 +13,12 @@
     <application
         android:name=".PodwaveApplication"
         android:allowBackup="true"
-        android:dataExtractionRules="@xml/data_extraction_rules"
         android:enableOnBackInvokedCallback="true"
-        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Podwave"
-        tools:targetApi="36">
+        android:theme="@style/Theme.Podwave">
 
         <activity
             android:name=".MainActivity"
@@ -34,7 +31,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Exported so system UI, Bluetooth devices and Android Auto can connect to the session. -->
         <service
             android:name=".playback.PlaybackService"
             android:exported="true"
@@ -44,13 +40,13 @@
             </intent-filter>
         </service>
 
-        <!-- Long downloads run as foreground work, which needs a declared service type on Android 14+. -->
+        <!-- Long-running downloads run as a foreground worker. -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"
             tools:node="merge" />
 
-        <!-- WorkManager is initialised by PodwaveApplication so workers can use Hilt. -->
+        <!-- WorkManager is initialised by Koin's worker factory instead. -->
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
