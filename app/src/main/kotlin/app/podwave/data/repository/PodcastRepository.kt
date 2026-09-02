@@ -67,3 +67,72 @@ class PodcastRepository(
                         categories = feed.categories.joinToString("\n"),
                     ),
                 )
+                val merge = FeedMerger.merge(podcastId, episodeDao.getForPodcast(podcastId), feed.episodes, now())
+                val inserted = episodeDao.insertAll(merge.toInsert).count { it != -1L }
+                if (merge.toUpdate.isNotEmpty()) episodeDao.updateAll(merge.toUpdate)
+                inserted
+            }
+        }
+        podcastDao.markRefreshed(podcastId, now(), result.exceptionOrNull()?.message)
+        return result
+    }
+
+    /** Refreshes every subscription, a few at a time. */
+    suspend fun refreshAll(parallelism: Int = 4): RefreshSummary = coroutineScope {
+        val semaphore = Semaphore(parallelism)
+        val results = podcastDao.getAll().map { podcast ->
+            async { semaphore.withPermit { refresh(podcast.id) } }
+        }.awaitAll()
+        RefreshSummary(
+            refreshed = results.count { it.isSuccess },
+            failed = results.count { it.isFailure },
+            newEpisodes = results.sumOf { it.getOrDefault(0) },
+        )
+    }
+
+    /** Removes the podcast and its episodes. Returns downloaded files the caller should delete. */
+    suspend fun unsubscribe(podcastId: Long): List<String> {
+        val files = episodeDao.downloadedFiles(podcastId)
+        podcastDao.delete(podcastId)
+        return files
+    }
+
+    suspend fun exportOpml(): String =
+        Opml.export(podcastDao.getAll().sortedBy { it.title.lowercase() }.map { OpmlOutline(it.title, it.feedUrl) })
+
+    suspend fun import(outlines: List<OpmlOutline>): ImportSummary {
+        var added = 0
+        var existing = 0
+        val failed = mutableListOf<String>()
+        for (outline in outlines) {
+            if (podcastDao.getByFeedUrl(normalizeFeedUrl(outline.feedUrl)) != null) {
+                existing++
+                continue
+            }
+            subscribe(outline.feedUrl).onSuccess { added++ }.onFailure { failed += outline.title }
+        }
+        return ImportSummary(added, existing, failed)
+    }
+
+    private fun ParsedFeed.toEntity(feedUrl: String, timestamp: Long) = PodcastEntity(
+        feedUrl = feedUrl,
+        title = title,
+        author = author,
+        description = description,
+        artworkUrl = artworkUrl,
+        link = link,
+        categories = categories.joinToString("\n"),
+        subscribedAt = timestamp,
+        lastRefreshedAt = timestamp,
+        lastRefreshError = null,
+    )
+}
+
+internal inline fun <T> runCatchingCancellable(block: () -> T): Result<T> =
+    try {
+        Result.success(block())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
