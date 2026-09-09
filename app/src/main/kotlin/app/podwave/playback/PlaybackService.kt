@@ -69,3 +69,74 @@ class PlaybackService : MediaSessionService() {
         )
         session = MediaSession.Builder(this, player)
             .setSessionActivity(openApp)
+            .build()
+    }
+
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = session
+
+    /** Swiping the app away stops playback only if nothing is playing. */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        val player = session?.player
+        if (player == null || !player.playWhenReady || player.mediaItemCount == 0) {
+            stopSelf()
+        }
+    }
+
+    override fun onDestroy() {
+        session?.player?.let { player ->
+            // Last chance to persist the position; bounded so shutdown can't hang.
+            runBlocking { withTimeoutOrNull(500) { saveProgress(player) } }
+            player.release()
+        }
+        session?.release()
+        session = null
+        scope.cancel()
+        super.onDestroy()
+    }
+
+    private inner class PlayerListener(private val player: Player) : Player.Listener {
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            progressJob?.cancel()
+            if (isPlaying) {
+                progressJob = scope.launch {
+                    while (isActive) {
+                        delay(SAVE_INTERVAL_MS)
+                        saveProgress(player)
+                        if (sleepTimer.shouldPauseNow()) player.pause()
+                    }
+                }
+            } else {
+                scope.launch { saveProgress(player) }
+            }
+        }
+
+        override fun onPlaybackStateChanged(playbackState: Int) {
+            if (playbackState == Player.STATE_ENDED) scope.launch { onEpisodeEnded(player) }
+        }
+    }
+
+    private suspend fun saveProgress(player: Player) {
+        val id = player.currentMediaItem?.episodeId ?: return
+        val duration = player.duration.takeIf { it != C.TIME_UNSET } ?: return
+        episodes.savePlayback(id, player.currentPosition, duration)
+    }
+
+    private suspend fun onEpisodeEnded(player: Player) {
+        val finishedId = player.currentMediaItem?.episodeId ?: return
+        episodes.setPlayed(finishedId, played = true)
+        val nextId = queue.next(finishedId)
+        queue.remove(finishedId)
+
+        if (sleepTimer.onEpisodeEnded()) return
+        val next = nextId?.let { episodes.get(it) } ?: return
+        player.setMediaItem(next.toMediaItem(), 0L)
+        player.prepare()
+        player.play()
+    }
+
+    companion object {
+        const val SEEK_BACK_MS = 10_000L
+        const val SEEK_FORWARD_MS = 30_000L
+        private const val SAVE_INTERVAL_MS = 5_000L
+    }
+}
