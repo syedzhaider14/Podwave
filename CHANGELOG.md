@@ -1,20 +1,19 @@
 # Changelog
 
-All notable changes to this project are documented here. The format is based on
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows
-[Semantic Versioning](https://semver.org/).
+All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
 
 ## [1.0.0]
 
 ### Added
 
-- Discover: top chart and debounced directory search.
-- Subscriptions with background refresh every six hours and conditional requests.
-- Streaming RSS parser with iTunes and `content:` namespace support.
-- Background playback with a Media3 session, notification and lock-screen controls.
-- Up next queue with play next and swipe to remove.
-- Continue listening and new episodes on the home screen.
-- Variable playback speed, configurable skip intervals and a sleep timer with fade-out.
-- Offline downloads with progress notifications, Wi‑Fi only mode and optional auto-download.
-- Show notes with links and tappable timestamps.
-- Light, dark and system themes with dynamic colour.
+- Background playback with Media3 MediaSessionService, notification and lock-screen controls.
+- Resume position, auto-mark played, playback speed, skip back/forward, sleep timer.
+- Up-next queue with play next, reorder and swipe to remove.
+- Directory search and subscribe by RSS URL.
+- Library views: latest, in progress, downloaded.
+- Episode downloads with progress, Wi-Fi-only option and retries.
+- Periodic background feed refresh.
+- OPML import and export.
+- Streaming RSS/OPML parser module with extensive tests.

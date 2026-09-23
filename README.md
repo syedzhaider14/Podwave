@@ -1,142 +1,105 @@
 # Podwave
 
-**A podcast player for Android** built with Jetpack Compose and Media3. Find shows in Apple's
-public directory, subscribe to their RSS feeds, and listen with background playback, offline
-downloads, a queue, variable speed and a sleep timer. No account, no server, no tracking: your
-subscriptions and progress live on your phone.
+**A podcast player for Android.** Subscribe to any show, stream or download episodes, build an up-next queue, and keep listening with the screen off, from the lock screen or a Bluetooth headset.
 
----
+Written in Kotlin with Jetpack Compose, Media3 (ExoPlayer + MediaSession), Room, WorkManager, Ktor and Koin.
+
+[![CI](https://github.com/OWNER/podwave/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/podwave/actions/workflows/ci.yml)
+![Min SDK](https://img.shields.io/badge/minSdk-26-6750A4)
+![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF)
+![License](https://img.shields.io/badge/license-MIT-blue)
+
+> Replace `OWNER` in the badge URLs with your GitHub username after pushing.
 
 ## Features
 
-- **Discover**: the current top chart, plus directory search with debounced queries and
-  "already subscribed" badges.
-- **Subscriptions** checked for new episodes every few hours in the background (WorkManager),
-  with conditional `If-None-Match` requests so unchanged feeds cost a few bytes.
-- **Streaming RSS parser** that copes with the feeds you find in the wild: iTunes and `content:`
-  namespaces, RFC 822 dates with named time zones or wrong weekdays, ISO-8601 dates,
-  `HH:MM:SS`/`MM:SS`/seconds durations, missing guids, video-only items and duplicate entries.
-- **Playback** through a Media3 `MediaSessionService`: lock screen, notification, Bluetooth and
-  headset controls, audio focus, pause on unplug, and resume from where you stopped.
-- **Up next** queue: add, play next, swipe to remove; finished episodes drop off automatically.
-- **Variable speed** (0.8× to 2×) remembered as your default, and **configurable skip** intervals.
-- **Sleep timer**: 5–60 minutes with a gentle fade-out, "+5 min", or stop at the end of the episode.
-- **Offline downloads** that survive process death (WorkManager restarts them), respect
-  "Wi‑Fi only", show progress in a notification and never leave half-written files behind. Optional auto-download of new
-  episodes.
-- **Show notes** rendered from HTML with working links, and **tappable timestamps** that jump to
-  that point in the episode.
-- **Material 3** with dynamic colour, light/dark/system theme, edge-to-edge layout and
-  predictive back.
+**Listening**
+- Background playback in a `MediaSessionService`: media notification, lock-screen and Bluetooth controls, audio focus, pause on headphone unplug
+- Resume where you left off (with a 3-second rewind for context); episodes auto-mark as played near the end
+- Playback speed 0.8×–2.5×, remembered between sessions
+- Skip back 10 s / forward 30 s, scrubbing with a live position preview
+- Sleep timer: 5–60 minutes, or at the end of the current episode
+- Up-next queue: add, play next, reorder, swipe to remove; plays through automatically
 
-## Tech stack
-
-| Concern | Choice |
-| --- | --- |
-| UI | Jetpack Compose, Material 3, Navigation Compose (type-safe routes) |
-| Playback | Media3 ExoPlayer + `MediaSessionService`, controlled through a `MediaController` |
-| Architecture | MVVM with unidirectional data flow, repositories over Room and the network |
-| DI | Hilt, including `@HiltWorker` |
-| Async | Kotlin Coroutines and Flow |
-| Local data | Room (KSP, exported schema, foreign keys) and Preferences DataStore |
-| Network | Ktor client (OkHttp engine) + kotlinx.serialization |
-| Feed parsing | `XmlPullParser` streaming parser (kXML in JVM tests) |
-| Images | Coil 3 sharing the app's Ktor client |
-| Background work | WorkManager (periodic refresh, expedited foreground downloads) |
-| Tests | JUnit, Truth, Turbine, kotlinx-coroutines-test, Ktor `MockEngine`, Room instrumented tests |
-
-Versions are pinned in [`gradle/libs.versions.toml`](gradle/libs.versions.toml): AGP 8.10,
-Kotlin 2.1, Compose BOM 2025.06, Media3 1.6, compile/target SDK 36, min SDK 26.
-
-## Getting started
-
-1. Install Android Studio (Narwhal or newer) with JDK 17+.
-2. Clone and open the project:
-   ```bash
-   git clone https://github.com/<your-username>/podwave.git
-   ```
-3. Run the `app` configuration on a device or emulator (API 26+).
-
-No API key is needed. Search uses the public iTunes Search API and episodes come straight from
-each show's feed.
-
-```bash
-./gradlew assembleDebug              # build
-./gradlew testDebugUnitTest          # JVM unit tests
-./gradlew connectedDebugAndroidTest  # Room tests on a device/emulator
-./gradlew lintDebug                  # Android lint
-```
+**Library**
+- Subscribe from the directory search (iTunes Search API) or by pasting any RSS link (`feed://`, `itpc://` and scheme-less URLs are accepted)
+- Latest, in-progress and downloaded episode views; pull to refresh
+- Periodic background refresh with WorkManager (network and battery constraints)
+- Offline downloads with progress, Wi-Fi-only option, retries with backoff, cancel and delete
+- OPML import and export to move subscriptions between apps
+- Show notes rendered from HTML with tappable links
 
 ## Architecture
 
-```mermaid
-graph LR
-  subgraph UI
-    Screens[Compose screens] --> VMs[ViewModels]
-  end
-  VMs --> Repos[PodcastRepository<br/>EpisodeRepository<br/>SettingsRepository]
-  VMs --> PC[PlayerController]
-  PC -- MediaController --> PS[PlaybackService<br/>ExoPlayer + MediaSession]
-  PS --> Repos
-  Repos --> Room[(Room)]
-  Repos --> DS[(DataStore)]
-  Repos --> Net[ITunesApi / FeedFetcher]
-  Net --> Parser[RssParser]
-  Workers[FeedRefreshWorker<br/>DownloadWorker] --> Repos
+```
+┌──────────── app ───────────────────────────────────────────────┐
+│  ui/        Compose screens + ViewModels (StateFlow, events)   │
+│  playback/  PlaybackService (Media3), PlayerController         │
+│  download/  DownloadWorker, FeedRefreshWorker (WorkManager)    │
+│  data/      Room, DataStore, Ktor clients, repositories        │
+│  domain/    Models, queue ordering, progress rules, sleep timer│
+│  di/        Koin modules (verified by a unit test)             │
+└───────────────────────┬────────────────────────────────────────┘
+                        ▼
+┌──────────── rss (pure Kotlin/JVM) ─────────────────────────────┐
+│  Streaming RSS 2.0 + iTunes parser, OPML, RFC 822 dates,       │
+│  itunes:duration parsing. No Android dependencies.             │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-- **The database is the source of truth.** Screens observe Room flows; network calls only ever
-  write to the database. That is what makes the app work offline and keeps every screen in sync.
-- **Playback lives in a service.** The UI never touches ExoPlayer. `PlayerController` talks to
-  `PlaybackService` through a `MediaController`, exactly as Android Auto or a smartwatch would,
-  and exposes one `StateFlow<PlayerState>` for Compose.
-- **Listener state survives refreshes.** Feeds are merged into the database by a pure function,
-  `FeedMerger`: publisher metadata always wins, your position, played state and downloads always
-  win. Episode ids hash the feed URL with the item guid, so they are stable across refreshes.
+Highlights:
+
+- **The service owns playback.** `PlaybackService` saves progress every few seconds and advances through the queue when an episode ends, so it works with no UI running. The UI talks to it through a `MediaController` wrapped in `PlayerController`, which exposes a `StateFlow<PlayerState>` for Compose.
+- **Feeds are merged, not replaced.** `FeedMerger` matches episodes by GUID, refreshes metadata publishers fix after release, and never touches listening progress or downloads.
+- **The RSS parser is a separate JVM module.** It streams with `XmlPullParser` (Android's built-in parser in the app, kxml2 in tests), handles CDATA, nested iTunes categories, duplicate GUIDs, items without audio, and the many date formats real feeds use.
+- **Pure rules are separate from Android.** `QueueOrder`, `PlaybackProgressPolicy` and `SleepTimer` are plain Kotlin with injected time, so they're trivially testable.
 
 More detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Project layout
+## Tech stack
 
+| Area | Libraries |
+| --- | --- |
+| UI | Jetpack Compose, Material 3, Navigation Compose (type-safe routes), Coil 3 |
+| Playback | Media3 ExoPlayer, Media3 Session |
+| Data | Room, Preferences DataStore |
+| Network | Ktor client (OkHttp engine), kotlinx.serialization |
+| Background | WorkManager (downloads as foreground work, periodic refresh) |
+| DI | Koin (Android, Compose, WorkManager) |
+| Testing | JUnit 4, Truth, Turbine, Ktor MockEngine, Koin `verify`, Room in-memory DB |
+
+## Getting started
+
+Requirements: Android Studio Ladybug or newer, JDK 17.
+
+```bash
+git clone https://github.com/OWNER/podwave.git
+cd podwave
+./gradlew :app:installDebug
 ```
-app/src/main/kotlin/dev/podwave/
-├── core/        DI module, qualifiers, small shared helpers
-├── data/        repositories, FeedMerger, Room entities and DAOs
-├── download/    WorkManager download and refresh workers
-├── model/       plain Kotlin models shared by every layer
-├── network/     iTunes directory API and the feed fetcher
-├── playback/    PlaybackService, PlayerController, sleep timer, media items
-├── rss/         streaming RSS parser and date/duration parsing
-└── ui/          Compose screens by feature, theme, navigation and shared components
-```
+
+No API keys needed.
+
+| Command | What it does |
+| --- | --- |
+| `./gradlew :rss:test` | Parser tests (fast, pure JVM) |
+| `./gradlew :app:testDebugUnitTest` | App unit tests, including Koin graph verification |
+| `./gradlew :app:connectedDebugAndroidTest` | Room queue tests on a device or emulator |
+| `./gradlew :app:lintDebug` | Android lint |
 
 ## Testing
 
-Business logic is written as plain functions or small classes so it can be tested on the JVM:
-
-- `RssParserTest`, `FeedParsingTest` parse a real-world-shaped feed fixture and the date and
-  duration formats publishers actually use.
-- `FeedMergerTest` covers how refreshes keep progress and downloads.
-- `ITunesApiTest`, `FeedFetcherTest` run the network layer against Ktor's `MockEngine`,
-  including ETags and `304 Not Modified`.
-- `SleepTimerTest`, `StartPositionTest`, `QueueOrderTest`, `DownloadFilesTest` cover playback
-  and download rules.
-- `DiscoverViewModelTest` drives debounced search on virtual time with a fake repository.
-- `FormattingTest`, `HtmlTest`, `TimestampsTest` cover what the UI shows.
-- `PodwaveDatabaseTest` (instrumented) checks queries, ordering and that refreshing episodes
-  never empties the queue.
+- **rss:** a realistic feed fixture (CDATA, nested categories, enclosures without lengths, trailers, duplicate GUIDs, items without audio), malformed XML, every `itunes:duration` format, RFC 822 dates with named zones, wrong weekdays and ISO fallbacks, OPML round-trips with escaping.
+- **app:** queue operations, completion and resume rules, sleep-timer state machine, feed merging, the directory client and feed fetcher against Ktor's `MockEngine` (including iTunes' `text/javascript` JSON), URL normalisation, and a Koin graph check that fails CI if a binding is missing.
+- **androidTest:** queue ordering and cascade deletes against a real Room database.
 
 ## Roadmap
 
-- Chapters (Podcasting 2.0 `podcast:chapters` and ID3 CHAP)
-- OPML import and export
-- Android Auto browsing via `MediaLibraryService`
-- Per-show playback speed and skip-intro
-- Transcripts (`podcast:transcript`)
-
-## Contributing
-
-Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
+- [ ] Chapters (Podcasting 2.0 `podcast:chapters`)
+- [ ] Android Auto browse tree via `MediaLibraryService`
+- [ ] Per-podcast playback speed and auto-download rules
+- [ ] Transcripts
+- [ ] Home-screen widget
 
 ## License
 
